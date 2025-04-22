@@ -1,0 +1,23 @@
+{
+  "name": "css-purger",
+  "version": "1.0.0",
+  "description": "A simple Node.js utility to remove unused CSS based on your HTML content. ",
+  "main": "purge.js",
+  "scripts": {
+    "dev": "nodemon purge.js",
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/indrajithc/css-purger.git"
+  },
+  "keywords": [
+    "css",
+    "purge"
+  ],
+  "author": "indrajithc",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/indrajithc/css-purger/issues"
+  },
+  "homepage": "https://github.com/indrajithc/css-purger#readme"
+}
