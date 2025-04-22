@@ -2,17 +2,22 @@ const express = require("express");
 const axios = require("axios");
 const { JSDOM } = require("jsdom");
 const postcss = require("postcss");
-// const purgecss = require("@fullhuman/postcss-purgecss");
 const purgecss = require("@fullhuman/postcss-purgecss").default;
-
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const PORT = 3000;
 
 // Download a remote file
 async function downloadFile(url) {
-  const response = await axios.get(url, { responseType: "text" });
-  return response.data;
+  try {
+    const response = await axios.get(url, { responseType: "text" });
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Failed to download: ${url}`, error.message);
+    return "";
+  }
 }
 
 // Extract external CSS links using jsdom
@@ -30,9 +35,7 @@ async function extractCSSLinks(html) {
           href.startsWith("https://") ||
           href.startsWith("//"))
     )
-    .map(
-      (href) => href?.replace(new RegExp("^//"), "https://") // convert protocol-relative URLs to absolute
-    ); // only absolute URLs
+    .map((href) => href.replace(/^\/\//, "https://")); // convert protocol-relative URLs
 }
 
 // Purge unused CSS
@@ -49,18 +52,18 @@ async function purgeCSS(html, cssList) {
   return result.css;
 }
 
-// Route: GET /
+// GET route for HTML form & processing
 app.get("/", async (req, res) => {
   const targetUrl = req.query.url;
 
   if (!targetUrl) {
     return res.send(`
-            <h2>CSS Purger Service</h2>
-            <form method="get">
-                <input type="url" name="url" placeholder="Enter your webpage URL" style="width:300px;" required />
-                <button type="submit">Purge CSS</button>
-            </form>
-        `);
+      <h2>🔧 CSS Purger Service</h2>
+      <form method="get">
+          <input type="url" name="url" placeholder="Enter webpage URL" style="width:300px;" required />
+          <button type="submit">Purge CSS</button>
+      </form>
+    `);
   }
 
   try {
@@ -68,6 +71,7 @@ app.get("/", async (req, res) => {
     const htmlData = await downloadFile(targetUrl);
 
     const cssUrls = await extractCSSLinks(htmlData);
+    console.log(`🔍 Found ${cssUrls.length} CSS files.`);
 
     if (!cssUrls.length) {
       return res.send("⚠️ No external CSS files found on the provided URL.");
@@ -75,26 +79,38 @@ app.get("/", async (req, res) => {
 
     const cssContents = await Promise.all(
       cssUrls.map(async (url) => {
-        try {
-          return await downloadFile(url);
-        } catch (e) {
-          console.warn(`⚠️ Failed to download CSS: ${url}`);
-          return "";
+        const css = await downloadFile(url);
+        if (!css.trim().startsWith("@") && !css.includes("{")) {
+          console.warn(`⚠️ Possibly invalid CSS from: ${url}`);
         }
+        return css;
       })
     );
 
-    const purgedCSS = await purgeCSS(htmlData, cssContents);
+    const validCSS = cssContents.filter((css) => css.trim().length > 10);
+
+    if (!validCSS.length) {
+      return res.send("❌ No valid CSS to process. Check the target site.");
+    }
+
+    // Debug: Save original CSS for inspection
+    const tempDir = path.join(__dirname, "temp_css");
+    fs.mkdirSync(tempDir, { recursive: true });
+    validCSS.forEach((css, index) => {
+      fs.writeFileSync(path.join(tempDir, `original-${index}.css`), css);
+    });
+
+    const purgedCSS = await purgeCSS(htmlData, validCSS);
 
     res.setHeader("Content-Type", "text/css");
     res.setHeader("Content-Disposition", 'attachment; filename="purged.css"');
     return res.send(purgedCSS);
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error("❌ Processing error:", error);
     res.status(500).send("Something went wrong. Check server logs.");
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 CSS Purger Server running at http://localhost:${PORT}`);
+  console.log(`🚀 CSS Purger Server running at: http://localhost:${PORT}`);
 });
