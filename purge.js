@@ -1,87 +1,100 @@
-const fs = require('fs-extra');
-const path = require('path');
-const axios = require('axios');
-const cheerio = require('cheerio');
-const postcss = require('postcss');
-const purgecss = require('@fullhuman/postcss-purgecss');
+const express = require("express");
+const axios = require("axios");
+const { JSDOM } = require("jsdom");
+const postcss = require("postcss");
+// const purgecss = require("@fullhuman/postcss-purgecss");
+const purgecss = require("@fullhuman/postcss-purgecss").default;
 
-const TEMP_DIR = path.join(__dirname, 'temp');
 
-async function downloadFile(url, outputPath) {
-  const { data } = await axios.get(url, { responseType: 'arraybuffer' });
-  await fs.outputFile(outputPath, data);
-  console.log(`✅ Downloaded: ${url}`);
+const app = express();
+const PORT = 3000;
+
+// Download a remote file
+async function downloadFile(url) {
+  const response = await axios.get(url, { responseType: "text" });
+  return response.data;
 }
 
-async function extractAndDownloadCSS(htmlPath) {
-  const htmlContent = await fs.readFile(htmlPath, 'utf-8');
-  const $ = cheerio.load(htmlContent);
-  const cssUrls = [];
+// Extract external CSS links using jsdom
+async function extractCSSLinks(html) {
+  const dom = new JSDOM(html);
+  const document = dom.window.document;
+  const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
 
-  $('link[rel="stylesheet"]').each((_, el) => {
-    const href = $(el).attr('href');
-    if (href && href.startsWith('http')) {
-      cssUrls.push(href);
-    }
-  });
-
-  const cssPaths = [];
-  for (const url of cssUrls) {
-    const fileName = path.basename(url.split('?')[0]);
-    const savePath = path.join(TEMP_DIR, fileName);
-    await downloadFile(url, savePath);
-    cssPaths.push(savePath);
-  }
-
-  return cssPaths;
+  return links
+    .map((link) => link.href)
+    .filter(
+      (href) =>
+        href &&
+        (href.startsWith("http://") ||
+          href.startsWith("https://") ||
+          href.startsWith("//"))
+    )
+    .map(
+      (href) => href?.replace(new RegExp("^//"), "https://") // convert protocol-relative URLs to absolute
+    ); // only absolute URLs
 }
 
-async function purgeAndSave(htmlPath, cssPaths) {
-  const htmlContent = await fs.readFile(htmlPath, 'utf-8');
-  let combinedCSS = '';
-
-  for (const cssPath of cssPaths) {
-    combinedCSS += await fs.readFile(cssPath, 'utf-8') + '\n';
-  }
+// Purge unused CSS
+async function purgeCSS(html, cssList) {
+  const combinedCSS = cssList.join("\n");
 
   const result = await postcss([
     purgecss({
-      content: [{ raw: htmlContent, extension: 'html' }],
-      defaultExtractor: content => content.match(/[\w-/:]+(?<!:)/g) || []
-    })
+      content: [{ raw: html, extension: "html" }],
+      defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
+    }),
   ]).process(combinedCSS, { from: undefined });
 
-  const output = path.join(__dirname, 'purged.css');
-  await fs.outputFile(output, result.css);
-  console.log(`🎉 Purged CSS saved to: ${output}`);
+  return result.css;
 }
 
-async function main() {
-  const url = process.argv[2];
+// Route: GET /
+app.get("/", async (req, res) => {
+  const targetUrl = req.query.url;
 
-  if (!url || !/^https?:\/\//i.test(url)) {
-    console.error(`❌ Please provide a valid URL! Example:
-node purge.js https://example.com/page.html`);
-    process.exit(1);
+  if (!targetUrl) {
+    return res.send(`
+            <h2>CSS Purger Service</h2>
+            <form method="get">
+                <input type="url" name="url" placeholder="Enter your webpage URL" style="width:300px;" required />
+                <button type="submit">Purge CSS</button>
+            </form>
+        `);
   }
 
-  await fs.ensureDir(TEMP_DIR);
+  try {
+    console.log(`🌐 Fetching HTML from: ${targetUrl}`);
+    const htmlData = await downloadFile(targetUrl);
 
-  const htmlPath = path.join(TEMP_DIR, 'downloaded.html');
-  await downloadFile(url, htmlPath);
+    const cssUrls = await extractCSSLinks(htmlData);
 
-  const cssPaths = await extractAndDownloadCSS(htmlPath);
-  if (cssPaths.length === 0) {
-    console.warn('⚠️ No CSS files found in the HTML.');
-    return;
+    if (!cssUrls.length) {
+      return res.send("⚠️ No external CSS files found on the provided URL.");
+    }
+
+    const cssContents = await Promise.all(
+      cssUrls.map(async (url) => {
+        try {
+          return await downloadFile(url);
+        } catch (e) {
+          console.warn(`⚠️ Failed to download CSS: ${url}`);
+          return "";
+        }
+      })
+    );
+
+    const purgedCSS = await purgeCSS(htmlData, cssContents);
+
+    res.setHeader("Content-Type", "text/css");
+    res.setHeader("Content-Disposition", 'attachment; filename="purged.css"');
+    return res.send(purgedCSS);
+  } catch (error) {
+    console.error("❌ Error:", error);
+    res.status(500).send("Something went wrong. Check server logs.");
   }
+});
 
-  await purgeAndSave(htmlPath, cssPaths);
-
-  // Optionally clean temp files:
-  // await fs.remove(TEMP_DIR);
-}
-
-main().catch(err => {
-  console.error('❌ Error:', err);
+app.listen(PORT, () => {
+  console.log(`🚀 CSS Purger Server running at http://localhost:${PORT}`);
 });
