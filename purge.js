@@ -22,13 +22,11 @@ const cssOverrides = [
   {
     original: "fonts.css",
     override: path.resolve(__dirname, "./overrides/fonts.css"),
-  }
+  },
 ];
 
 // 👇 Define safelist selectors (e.g., classes/IDs/tags you always want included)
-const safelistSelectors = [
-  "is-navbar-expanded", "mm_t84search"
-];
+const safelistSelectors = ["is-navbar-expanded", "mm_t84search"];
 
 async function downloadFile(url) {
   try {
@@ -58,19 +56,19 @@ async function extractCSSLinks(html) {
 }
 
 async function purgeCSS(html, cssList) {
-  const combinedCSS = cssList.map(entry => entry.css).join("\n");
+  const combinedCSS = cssList.map((entry) => entry.css).join("\n");
 
   try {
     const result = await postcss([
       flexbugs,
-      presetEnv({ stage: 3, features: { 'nesting-rules': true } }),
+      presetEnv({ stage: 3, features: { "nesting-rules": true } }),
       autoprefixer,
       purgecss({
         content: [{ raw: html, extension: "html" }],
         safelist: safelistSelectors,
-        defaultExtractor: content => content.match(/[\w-/:]+(?<!:)/g) || [],
+        defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
       }),
-      cssnano()
+      cssnano(),
     ]).process(combinedCSS, { from: undefined });
 
     return result.css;
@@ -105,7 +103,9 @@ app.get("/", async (req, res) => {
     console.log(`🔍 Found ${cssUrls.length} CSS files.`);
 
     if (!cssUrls.length) {
-      return res.status(400).send("⚠️ No external CSS files found on the provided URL.");
+      return res
+        .status(400)
+        .send("⚠️ No external CSS files found on the provided URL.");
     }
 
     const cssContents = [];
@@ -113,24 +113,43 @@ app.get("/", async (req, res) => {
     for (let i = 0; i < cssUrls.length; i++) {
       const url = cssUrls[i];
       const fileName = path.basename(new URL(url).pathname);
-
-      const overrideEntry = cssOverrides.find(o => o.original === fileName);
+      const overrideEntry = cssOverrides.find((o) => o.original === fileName);
       let css;
-
       try {
         if (overrideEntry) {
-          console.log(`📁 Using local override for ${fileName}: ${overrideEntry.override}`);
+          console.log(
+            `📁 Using local override for ${fileName}: ${overrideEntry.override}`
+          );
           css = fs.readFileSync(overrideEntry.override, "utf-8");
         } else {
           console.log(`🌐 Downloading remote CSS: ${url}`);
           css = await downloadFile(url);
+
+          // 🌐 Replace relative url(...) with absolute URLs
+          const baseUrl =
+            new URL(url).origin + path.dirname(new URL(url).pathname) + "/";
+          css = css.replace(
+            /url\((['"]?)(\.{1,2}\/[^'")]+)\1\)/g,
+            (match, quote, relativePath) => {
+              const absoluteUrl = new URL(relativePath, baseUrl).href;
+              return `url(${quote}${absoluteUrl}${quote})`;
+            }
+          );
         }
 
         if (!isValidCSS(css)) {
-          throw new Error(`❌ Invalid CSS from ${overrideEntry ? overrideEntry.override : url}`);
+          throw new Error(
+            `❌ Invalid CSS from ${
+              overrideEntry ? overrideEntry.override : url
+            }`
+          );
         }
 
-        cssContents.push({ fileName, css, source: overrideEntry ? "local" : "remote" });
+        cssContents.push({
+          fileName,
+          css,
+          source: overrideEntry ? "local" : "remote",
+        });
       } catch (err) {
         console.error(err.message);
         return res.status(400).send(err.message);
