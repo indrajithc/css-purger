@@ -13,14 +13,22 @@ const presetEnv = require("postcss-preset-env");
 const app = express();
 const PORT = 3000;
 
+// 👇 Define local overrides
 const cssOverrides = [
   {
     original: "screen-desktop.css",
     override: path.resolve(__dirname, "./overrides/screen-desktop.css"),
   },
-  
+  {
+    original: "fonts.css",
+    override: path.resolve(__dirname, "./overrides/fonts.css"),
+  }
 ];
 
+// 👇 Define safelist selectors (e.g., classes/IDs/tags you always want included)
+const safelistSelectors = [
+  "is-navbar-expanded", "mm_t84search"
+];
 
 async function downloadFile(url) {
   try {
@@ -46,25 +54,23 @@ async function extractCSSLinks(html) {
           href.startsWith("https://") ||
           href.startsWith("//"))
     )
-    .map((href) => href.replace(/^\/\//, "https://"));z
+    .map((href) => href.replace(/^\/\//, "https://"));
 }
 
 async function purgeCSS(html, cssList) {
-  const combinedCSS = cssList.join("\n");
+  const combinedCSS = cssList.map(entry => entry.css).join("\n");
 
   try {
     const result = await postcss([
       flexbugs,
-      presetEnv({
-        stage: 3,
-        features: { 'nesting-rules': true },
-      }),
+      presetEnv({ stage: 3, features: { 'nesting-rules': true } }),
       autoprefixer,
       purgecss({
         content: [{ raw: html, extension: "html" }],
-        defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
+        safelist: safelistSelectors,
+        defaultExtractor: content => content.match(/[\w-/:]+(?<!:)/g) || [],
       }),
-      cssnano() // Minify here
+      cssnano()
     ]).process(combinedCSS, { from: undefined });
 
     return result.css;
@@ -78,7 +84,6 @@ function isValidCSS(css) {
   return css && css.includes("{") && css.includes("}");
 }
 
-// Route
 app.get("/", async (req, res) => {
   const targetUrl = req.query.url;
 
@@ -104,14 +109,14 @@ app.get("/", async (req, res) => {
     }
 
     const cssContents = [];
+
     for (let i = 0; i < cssUrls.length; i++) {
       const url = cssUrls[i];
       const fileName = path.basename(new URL(url).pathname);
-      console.log({fileName})
-    
+
       const overrideEntry = cssOverrides.find(o => o.original === fileName);
       let css;
-    
+
       try {
         if (overrideEntry) {
           console.log(`📁 Using local override for ${fileName}: ${overrideEntry.override}`);
@@ -120,27 +125,27 @@ app.get("/", async (req, res) => {
           console.log(`🌐 Downloading remote CSS: ${url}`);
           css = await downloadFile(url);
         }
-    
+
         if (!isValidCSS(css)) {
-          throw new Error(`❌ Could not parse CSS from ${overrideEntry ? overrideEntry.override : url}`);
+          throw new Error(`❌ Invalid CSS from ${overrideEntry ? overrideEntry.override : url}`);
         }
-    
-        cssContents.push(css);
+
+        cssContents.push({ fileName, css, source: overrideEntry ? "local" : "remote" });
       } catch (err) {
         console.error(err.message);
         return res.status(400).send(err.message);
       }
     }
+
     const tempDir = path.join(__dirname, "temp_css");
     fs.mkdirSync(tempDir, { recursive: true });
 
-    cssContents.forEach((css, index) => {
-      const url = cssUrls[index];
-      const baseName = path.basename(new URL(url).pathname) || `cssfile-${index}.css`;
+    cssContents.forEach((entry, index) => {
+      const baseName = entry.fileName || `cssfile-${index}.css`;
       const safeName = baseName.replace(/[^a-z0-9_.-]/gi, "_");
       const finalName = `original-${index}-${safeName}`;
-      fs.writeFileSync(path.join(tempDir, finalName), css);
-      console.log(`💾 Saved: ${finalName} from ${url}`);
+      fs.writeFileSync(path.join(tempDir, finalName), entry.css);
+      console.log(`💾 Saved: ${finalName} (${entry.source})`);
     });
 
     const purgedCSS = await purgeCSS(htmlData, cssContents);
@@ -153,7 +158,6 @@ app.get("/", async (req, res) => {
     return res.status(500).send("Internal server error: " + error.message);
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`🚀 CSS Purger Server running at: http://localhost:${PORT}`);
