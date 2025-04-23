@@ -5,7 +5,7 @@ const postcss = require("postcss");
 const purgecss = require("@fullhuman/postcss-purgecss").default;
 const fs = require("fs");
 const path = require("path");
-
+const cssnano = require("cssnano");
 const autoprefixer = require("autoprefixer");
 const flexbugs = require("postcss-flexbugs-fixes");
 const presetEnv = require("postcss-preset-env");
@@ -56,21 +56,20 @@ async function purgeCSS(html, cssList) {
     const result = await postcss([
       flexbugs,
       presetEnv({
-        stage: 3, // Enables modern CSS with some fallback
-        features: {
-          'nesting-rules': true
-        }
+        stage: 3,
+        features: { 'nesting-rules': true },
       }),
       autoprefixer,
       purgecss({
         content: [{ raw: html, extension: "html" }],
         defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
       }),
+      cssnano() // Minify here
     ]).process(combinedCSS, { from: undefined });
 
     return result.css;
   } catch (err) {
-    console.error("❌ Error while purging CSS:", err.message);
+    console.error("❌ Error while purging/minifying CSS:", err.message);
     return "";
   }
 }
