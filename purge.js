@@ -54,6 +54,14 @@ async function purgeCSS(html, cssList) {
 
   try {
     const result = await postcss([
+      flexbugs,
+      presetEnv({
+        stage: 3, // Enables modern CSS with some fallback
+        features: {
+          'nesting-rules': true
+        }
+      }),
+      autoprefixer,
       purgecss({
         content: [{ raw: html, extension: "html" }],
         defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
