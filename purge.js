@@ -13,7 +13,6 @@ const presetEnv = require("postcss-preset-env");
 const app = express();
 const PORT = 3000;
 
-// 👇 Define local overrides
 const cssOverrides = [
   {
     original: "screen-desktop.css",
@@ -25,8 +24,7 @@ const cssOverrides = [
   },
 ];
 
-// 👇 Define safelist selectors (e.g., classes/IDs/tags you always want included)
-const safelistSelectors = ["is-navbar-expanded", "mm_t84search"];
+const safelistSelectors = ["is-navbar-expanded", "mm_t84search", "background-set-menu", "border-bottom-adjust", "is-expanded", "m-navbar-has-subnav","is-subnav-expanded"];
 
 async function downloadFile(url) {
   try {
@@ -38,21 +36,23 @@ async function downloadFile(url) {
   }
 }
 
-async function extractCSSLinks(html) {
+async function extractCSSLinksWithMedia(html) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
   const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
 
   return links
-    .map((link) => link.href)
     .filter(
-      (href) =>
-        href &&
-        (href.startsWith("http://") ||
-          href.startsWith("https://") ||
-          href.startsWith("//"))
+      (link) =>
+        link.href &&
+        (link.href.startsWith("http://") ||
+          link.href.startsWith("https://") ||
+          link.href.startsWith("//"))
     )
-    .map((href) => href.replace(/^\/\//, "https://"));
+    .map((link) => ({
+      href: link.href.replace(/^\/\//, "https://"),
+      media: link.media || null,
+    }));
 }
 
 async function purgeCSS(html, cssList) {
@@ -99,10 +99,10 @@ app.get("/", async (req, res) => {
     console.log(`🌐 Fetching HTML from: ${targetUrl}`);
     const htmlData = await downloadFile(targetUrl);
 
-    const cssUrls = await extractCSSLinks(htmlData);
-    console.log(`🔍 Found ${cssUrls.length} CSS files.`);
+    const cssLinks = await extractCSSLinksWithMedia(htmlData);
+    console.log(`🔍 Found ${cssLinks.length} CSS files.`);
 
-    if (!cssUrls.length) {
+    if (!cssLinks.length) {
       return res
         .status(400)
         .send("⚠️ No external CSS files found on the provided URL.");
@@ -110,8 +110,8 @@ app.get("/", async (req, res) => {
 
     const cssContents = [];
 
-    for (let i = 0; i < cssUrls.length; i++) {
-      const url = cssUrls[i];
+    for (let i = 0; i < cssLinks.length; i++) {
+      const { href: url, media } = cssLinks[i];
       const fileName = path.basename(new URL(url).pathname);
       const overrideEntry = cssOverrides.find((o) => o.original === fileName);
       let css;
@@ -125,7 +125,6 @@ app.get("/", async (req, res) => {
           console.log(`🌐 Downloading remote CSS: ${url}`);
           css = await downloadFile(url);
 
-          // 🌐 Replace relative url(...) with absolute URLs
           const baseUrl =
             new URL(url).origin + path.dirname(new URL(url).pathname) + "/";
           css = css.replace(
@@ -143,6 +142,12 @@ app.get("/", async (req, res) => {
               overrideEntry ? overrideEntry.override : url
             }`
           );
+        }
+
+        // 👇 Wrap in media query if link tag has a media attribute
+        if (media && media.trim()) {
+          console.log(`🎯 Wrapping ${fileName} with media: ${media}`);
+          css = `@media ${media} {\n${css}\n}`;
         }
 
         cssContents.push({
