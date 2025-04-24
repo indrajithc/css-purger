@@ -4,7 +4,8 @@
   "description": "A simple Node.js utility to remove unused CSS based on your HTML content. ",
   "main": "purge.js",
   "scripts": {
-    "dev": "nodemon purge.js"
+    "dev": "nodemon purge.js",
+    "list-css": "nodemon listCss.js"
   },
   "repository": {
     "type": "git",
