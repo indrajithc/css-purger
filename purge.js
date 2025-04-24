@@ -9,6 +9,7 @@ const cssnano = require("cssnano");
 const autoprefixer = require("autoprefixer");
 const flexbugs = require("postcss-flexbugs-fixes");
 const presetEnv = require("postcss-preset-env");
+const splitCSSByMedia = require("./splitCSSByMedia");
 
 const app = express();
 const PORT = 3000;
@@ -24,7 +25,17 @@ const cssOverrides = [
   },
 ];
 
-const safelistSelectors = ["is-navbar-expanded", "mm_t84search", "background-set-menu", "border-bottom-adjust", "is-expanded", "m-navbar-has-subnav","is-subnav-expanded"];
+const safelistSelectors = [
+  "is-navbar-expanded",
+  "mm_t84search",
+  "background-set-menu",
+  "border-bottom-adjust",
+  "is-expanded",
+  "m-navbar-has-subnav",
+  "is-subnav-expanded",
+];
+
+const breakpoints = [961];
 
 async function downloadFile(url) {
   try {
@@ -82,8 +93,11 @@ function isValidCSS(css) {
   return css && css.includes("{") && css.includes("}");
 }
 
+app.use(express.static(path.join(__dirname, "public")));
+
 app.get("/", async (req, res) => {
   const targetUrl = req.query.url;
+  const doSlitCSS = req.query.split === "true";
 
   if (!targetUrl) {
     return res.send(`
@@ -173,6 +187,36 @@ app.get("/", async (req, res) => {
     });
 
     const purgedCSS = await purgeCSS(htmlData, cssContents);
+
+    if (doSlitCSS) {
+      // Split into media-specific files
+      const splitCSS = await splitCSSByMedia(purgedCSS);
+
+      const outputDir = path.join(__dirname, "public/css-split");
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      const linkTags = [];
+
+      for (const [key, css] of Object.entries(splitCSS)) {
+        const fileName = `${key}.css`;
+        const filePath = path.join(outputDir, fileName);
+        fs.writeFileSync(filePath, css, "utf-8");
+
+        const mediaAttr = key.startsWith("media-")
+          ? ` media="${key.replace("media-", "").replace(/-/g, " ")}"`
+          : "";
+
+        linkTags.push(
+          `<a  href="/css-split/${fileName}"${mediaAttr} target="_blank">${fileName}</a>`
+        );
+      }
+
+      // Serve HTML preview
+      res.send(`
+        <h3>✅ Purged and Split CSS</h3>
+        ${linkTags.join("<br/>")}
+      `);
+    }
 
     res.setHeader("Content-Type", "text/css");
     res.setHeader("Content-Disposition", 'filename="purged.css"');
