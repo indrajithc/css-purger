@@ -156,19 +156,19 @@ app.all("/html", async (req, res) => {
             const styles = iframeDoc.querySelectorAll("style");
             let cssLinks = [];
             
-            let completeCss = "";
+            const completeCss = [];
 
             const showType = document.querySelector('input[name="show-type"]:checked').value;
 
             styles.forEach(style => {
               if (style?.innerHTML) {
                 cssLinks.push( showType === "pre" ? style.innerHTML : style.outerHTML);
-                completeCss += style.innerHTML;
+                completeCss.push(style.innerHTML);
               }
             });
 
 
-            document.getElementById("complete-css").value = completeCss;
+            document.getElementById("complete-css").value = completeCss.join("\\n\\n");
           itemCount.innerHTML = "<h3>Found " + cssLinks.length + " Style tags</h3>";
             
             infoContainer.innerHTML = "<h3>Style tags:</h3><ol class='nav-list'>" + cssLinks.map(link => 
