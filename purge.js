@@ -207,7 +207,7 @@ app.get("/", async (req, res) => {
           : "";
 
         linkTags.push(
-          `<a  href="/css-split/${fileName}"${mediaAttr} target="_blank">${fileName}</a>`
+          `<a  href="/css-split/${fileName}"${mediaAttr} target="_blank">${fileName} <b>(${mediaAttr})</b></a>`
         );
       }
 
