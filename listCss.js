@@ -119,11 +119,20 @@ app.all("/html", async (req, res) => {
             <td width="50%" style="max-width:50vw;">
             <div class="d-flex justify-content-between align-items-center">
             <button class="btn btn-primary" id="load-styles">Load style tags</button>
+            <div>
+            <input type='radio' name='show-type' id='show-type' value='pre' checked>
+            <label for='show-type'>Pre</label>
+            <input type='radio' name='show-type' id='show-type' value='textarea'>
+            <label for='show-type'>Textarea</label>
+            </div>
             <h3  id="item-count"></h3>
             
             </div>
             <div id="info-container" style="overflow-y:auto; max-height:95vh;">
             <h3>Loading...</h3>
+            </div>
+            <div>
+            <textarea readonly class="form-control w-100" id="complete-css" ></textarea>
             </div>
             </td>
             <td> 
@@ -146,18 +155,27 @@ app.all("/html", async (req, res) => {
             const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
             const styles = iframeDoc.querySelectorAll("style");
             let cssLinks = [];
+            
+            let completeCss = "";
+
+            const showType = document.querySelector('input[name="show-type"]:checked').value;
 
             styles.forEach(style => {
               if (style?.innerHTML) {
-                cssLinks.push(style.innerHTML);
+                cssLinks.push( showType === "pre" ? style.innerHTML : style.outerHTML);
+                completeCss += style.innerHTML;
               }
             });
 
+
+            document.getElementById("complete-css").value = completeCss;
           itemCount.innerHTML = "<h3>Found " + cssLinks.length + " Style tags</h3>";
             
             infoContainer.innerHTML = "<h3>Style tags:</h3><ol class='nav-list'>" + cssLinks.map(link => 
              "<li class='list-item'>"+
-             "<div class='card mb-2'><div class='card-body'><pre>" + link + "</pre></div></div>" +
+            ( showType === "pre" ?
+             "<div class='card mb-2'><div class='card-body'><pre>" + link + "</pre></div></div>" :
+             "<div class='card mb-2'><div class='card-body'><textarea class='form-control w-100'>" + link + "</textarea></div></div>") +
              
              "</li>"
               ).join("") + "</ol>";
