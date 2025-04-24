@@ -117,7 +117,14 @@ app.all("/html", async (req, res) => {
         <tbody>
           <tr>
             <td width="50%" style="max-width:50vw;">
-            <div id="info-container"></div>
+            <div class="d-flex justify-content-between align-items-center">
+            <button class="btn btn-primary" id="load-styles">Load style tags</button>
+            <h3  id="item-count"></h3>
+            
+            </div>
+            <div id="info-container" style="overflow-y:auto; max-height:95vh;">
+            <h3>Loading...</h3>
+            </div>
             </td>
             <td> 
             <iframe id="iframe-target" src="/htmls/${uniqueId}.html" style="width:100%; height:100%;" frameborder="0" scrolling="yes"></iframe>
@@ -131,19 +138,24 @@ app.all("/html", async (req, res) => {
           
           const iframe = document.getElementById("iframe-target");
           const infoContainer = document.getElementById("info-container");
+          const itemCount = document.getElementById("item-count");
 
           const updateInfo = () => {
+            infoContainer.innerHTML = "<h3>Loading...</h3>";
+            itemCount.innerHTML = "<h3>0</h3>";
             const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
             const styles = iframeDoc.querySelectorAll("style");
             let cssLinks = [];
 
             styles.forEach(style => {
-              if (style?.innerHTML?.trim()) {
+              if (style?.innerHTML) {
                 cssLinks.push(style.innerHTML);
               }
             });
+
+          itemCount.innerHTML = "<h3>Found " + cssLinks.length + " Style tags</h3>";
             
-            infoContainer.innerHTML = "<h3>CSS Links:</h3><ol class='nav-list'>" + cssLinks.map(link => 
+            infoContainer.innerHTML = "<h3>Style tags:</h3><ol class='nav-list'>" + cssLinks.map(link => 
              "<li class='list-item'>"+
              "<div class='card mb-2'><div class='card-body'><pre>" + link + "</pre></div></div>" +
              
@@ -152,7 +164,11 @@ app.all("/html", async (req, res) => {
           };
           iframe.onload = () => {
             updateInfo();
-            setInterval(updateInfo, 5000); // Update every 5 seconds
+            
+            const loadStylesButton = document.getElementById("load-styles");
+            loadStylesButton.addEventListener("click", () => {
+             updateInfo();
+            });
           };
 
           })()
