@@ -4,3 +4,4 @@ temp_css
 overrides
 public/css*
 .cache
+.env

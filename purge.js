@@ -10,6 +10,12 @@ const autoprefixer = require("autoprefixer");
 const flexbugs = require("postcss-flexbugs-fixes");
 const presetEnv = require("postcss-preset-env");
 const splitCSSByMedia = require("./splitCSSByMedia");
+const dotenv = require("dotenv");
+
+dotenv.config();
+
+const safelistSelectors = JSON.parse(process.env.SAFELIST_SELECTORS || "[]");
+
 
 const app = express();
 const PORT = 3000;
@@ -23,17 +29,7 @@ const cssOverrides = [
     original: "fonts.css",
     override: path.resolve(__dirname, "./overrides/fonts.css"),
   },
-];
-
-const safelistSelectors = [
-  "is-navbar-expanded",
-  "mm_t84search",
-  "background-set-menu",
-  "border-bottom-adjust",
-  "is-expanded",
-  "m-navbar-has-subnav",
-  "is-subnav-expanded",
-];
+]; 
 
 const breakpoints = [961];
 
@@ -79,7 +75,7 @@ async function purgeCSS(html, cssList) {
         safelist: safelistSelectors,
         defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
       }),
-      cssnano(),
+      // cssnano(),
     ]).process(combinedCSS, { from: undefined });
 
     return result.css;
@@ -124,6 +120,8 @@ app.get("/", async (req, res) => {
 
     const cssContents = [];
 
+    console.log({cssLinks: cssLinks.map(link => link.href)});
+
     for (let i = 0; i < cssLinks.length; i++) {
       const { href: url, media } = cssLinks[i];
       const fileName = path.basename(new URL(url).pathname);
@@ -138,6 +136,7 @@ app.get("/", async (req, res) => {
         } else {
           console.log(`🌐 Downloading remote CSS: ${url}`);
           css = await downloadFile(url);
+
 
           const baseUrl =
             new URL(url).origin + path.dirname(new URL(url).pathname) + "/";
