@@ -75,7 +75,7 @@ async function purgeCSS(html, cssList) {
         safelist: safelistSelectors,
         defaultExtractor: (content) => content.match(/[\w-/:]+(?<!:)/g) || [],
       }),
-      // cssnano(),
+      cssnano(),
     ]).process(combinedCSS, { from: undefined });
 
     return result.css;
