@@ -5,7 +5,8 @@
   "main": "purge.js",
   "scripts": {
     "dev": "nodemon purge.js",
-    "list-css": "nodemon listCss.js"
+    "list-css": "nodemon listCss.js",
+    "list-script": "nodemon listScript.js"
   },
   "repository": {
     "type": "git",
