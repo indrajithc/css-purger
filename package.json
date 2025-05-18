@@ -7,7 +7,8 @@
     "dev": "nodemon purge.js",
     "list-css": "nodemon listCss.js",
     "list-script": "nodemon listScript.js",
-    "lis": "nodemon listInitialScript.js"
+    "lis": "nodemon listInitialScript.js",
+    "liso": "nodemon listScriptFromFile.js"
   },
   "repository": {
     "type": "git",

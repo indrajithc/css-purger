@@ -5,3 +5,4 @@ overrides
 public/css*
 .cache
 .env
+offline
