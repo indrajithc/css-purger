@@ -115,7 +115,7 @@ app.all("/html", async (req, res) => {
         Type: script.type || 'text/javascript',
         Async: script.async,
         Defer: script.defer,
-        ContentPreview: script.innerText || '[Empty]'
+        ContentPreview: script.textContent || script.innerText || '[Empty]'
       });
     });
    
